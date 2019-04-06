@@ -1,0 +1,337 @@
+#!/usr/bin/env python3
+'''
+--------------------------------------------------------------------------------
+---- pylinvstmanage ------------------------------------------------------------
+--------------------------------------------------------------------------------
+'''
+
+import configparser
+import os
+import sys
+import shutil
+import re
+from enum import Enum
+import logging as log
+
+try:
+    from termcolor import colored as colo
+    colorSupport = True
+except ImportError:
+    colorSupport = False
+    pass # module doesn't exist, deal with it.
+
+# Set log level
+# log.basicConfig(level=log.DEBUG)
+log.basicConfig(level=log.ERROR)
+
+class Status(Enum):
+    ENABLED = 1
+    DISABLED = 2
+    NO_SO = 3
+    NOTFOUND = 4
+    ERROR = 5
+    NA = 6
+
+class VstBucket:
+    def __init__(self, vendor, path, dll):
+        self.vendor = vendor
+        self.path = path
+        self.dll = dll
+        self.status = Status.NA
+
+class GenSet:
+    def __init__(self):
+        self.path_link_folder = "" 
+        self.path_linvst_so = ""
+
+
+# Extract data from respective config file 'pylinvstmanage.ini'
+def readConfig(genSet, vstList):
+    possibleConfigPaths = ("./pylinvstmanage.ini", 
+                           "~/.config/linvst/manage/pylinvstmanage.ini")
+
+    configPath = ""
+    for path in possibleConfigPaths:
+        path = os.path.expanduser(path)
+        if os.path.isfile(path):
+            configPath = path
+            print("| Using config file: {0:57}".format(configPath), "|")
+            break
+        else:
+            print("| No config file at: {0:57}".format(path), "|")
+    print("--------------------------------------------------------------------------------")
+
+    if configPath != "":
+        try:
+            config = configparser.ConfigParser()
+            config.read(configPath)
+        except:
+            print(sys.exc_info()[0])
+            return False
+    else:
+        return (False)
+
+    # Parse section 'GenericSettings'
+    genSet.path_link_folder = config['GeneralSettings']['path_link_folder'].replace('\\', '')
+    if config.has_option('GeneralSettings', 'path_linvst_so'):
+        genSet.path_linvst_so = config['GeneralSettings']['path_linvst_so'].replace('\\', '')
+    else:
+        genSet.path_linvst_so = '/usr/share/LinVst/linvst.so'
+    
+    # Parse VST sections
+    for section in config.sections()[1:]:
+        path = config[section]['path'].replace('\\', '')
+        dll_names = config[section]['dll_names']
+        # Extract all comma separated dll names
+        dlls = dll_names.split(',')
+        for dll in dlls:
+            vstList.append(VstBucket(section.replace(' ', '_'), path, dll.strip()))
+
+    return (True)
+
+
+def refreshVstStatus(genSet, vstBuckets):
+    for vstBucket in vstBuckets:
+        dllPath = vstBucket.path + vstBucket.dll
+        linkPath = genSet.path_link_folder + vstBucket.vendor + '/' + vstBucket.dll[0:-4] + '.so'
+
+        log.debug("dllPath; %s", dllPath)
+        log.debug("linkPath: %s", linkPath)
+
+        
+        if (vstBucket.dll.endswith( ".dll" ) or 
+            vstBucket.dll.endswith( ".DLL" ) or 
+            vstBucket.dll.endswith( ".Dll" )):
+            if os.path.isfile(os.path.expanduser(dllPath)):
+                log.debug("  -->> dll: exists")
+                if os.path.isfile(os.path.expanduser(dllPath)):
+                    log.debug("  -->> so: exists")
+                    if os.path.isfile(os.path.expanduser(linkPath)):
+                        log.debug("  -->> link: exists")
+                        vstBucket.status = Status.ENABLED
+                    else:
+                        log.debug("  -->> link: not there")
+                        vstBucket.status = Status.DISABLED
+                else:
+                    log.debug("  -->> so: not there")
+                    vstBucket.status = Status.NO_SO
+            else:
+                log.debug("  -->> dll: not there")
+                vstBucket.status = Status.NOTFOUND
+        else:
+            vstBucket.status = Status.ERROR
+            log.debug("Not a dll file.")
+
+
+
+def uiHelp():
+    print("==== Help ======================================================================")
+    print("| - h: This help message                                                       |")
+    print("| - q: Quit                                                                    |")
+    print("| - s: Print status                                                            |")
+    print("| - u: Update/Create *.so files for all existing VST-dlls                      |")
+    print("| - -------------------------------------------------------------------------- |")
+    print("| - e: Enable specified VSTs                                                   |")
+    print("| - d: Disable specified VSTs                                                  |\n" +
+          "|   (i.e. 'e a': enable all disabled VSTs                                      |\n" +
+          "|         'd 3': enable VST with index 3                                       |\n" +
+          "|         'e 4,5,7': enable VSTs with index 4,5 and 7)                         |")
+    print("================================================================================")
+
+
+# Convert internal VST status to printable one
+def formatStatus(enumStatus):
+    # Note: colorSupport with package 'colored' seems to ignore width formatting later on.
+    #       Therefore padding is added manually here as a workaround.
+    if enumStatus == Status.ENABLED:
+        if colorSupport:
+            st = colo('Enabled  ', 'green')
+        else:
+            st = 'Enabled'
+    elif enumStatus == Status.DISABLED:
+        if colorSupport:
+            st = colo('Disabled ', 'yellow')
+        else:
+            st = 'Disabled'
+    elif enumStatus == Status.NO_SO:
+        if colorSupport:
+            st = colo('No *.so  ', 'cyan')
+        else:
+            st = 'No *.so'
+    elif enumStatus == Status.NOTFOUND:
+        if colorSupport:
+            st = colo('NotFound ', 'red')
+        else:
+            st = 'NotFound'
+    else:
+        if colorSupport:
+            st = colo('Error    ', 'red')
+        else:
+            st = 'Error'
+    return st
+
+
+def uiStatus(vstBuckets):
+    os.system('clear')
+    print("==== Status ====================================================================")
+    print("|  # |  Status    |  Name                           |  Vendor                  |")
+    print("|------------------------------------------------------------------------------|")
+    for index, vstBucket in enumerate(vstBuckets):
+        status = formatStatus(vstBucket.status)
+        print("| {0:2} |  {1:9} |  {2:30} |  {3:23} |".format( 
+                index + 1, status, vstBucket.dll, vstBucket.vendor))
+    print("================================================================================")
+
+
+# Update all *.so files associated with enabled or disabled VSTs
+def vstUpdate(genSet, vstBuckets):
+    for vstBucket in vstBuckets:
+        log.debug("vstBucket.status: %s", vstBucket.status)
+        if ((vstBucket.status == Status.NO_SO) or 
+            (vstBucket.status == Status.DISABLED) or 
+            (vstBucket.status == Status.ENABLED)):
+            sofile = ((vstBucket.path + vstBucket.dll)[0:-4] + ".so")
+            log.debug("sofile: %s", os.path.expanduser(sofile))
+            log.debug("genSet.path_linvst_so: %s", genSet.path_linvst_so)
+            shutil.copyfile(genSet.path_linvst_so, os.path.expanduser(sofile))
+    print("--------------------------------------------------------------------------------")
+    print("|   Update performed.                                                          |")
+    print("--------------------------------------------------------------------------------")
+
+
+def vstEnable(genSet, vstBuckets, args):
+    print("--------------------------------------------------------------------------------")
+    log.debug("vstEnable")
+    if args[0] == 'a':
+        # Add all VSTs to selection
+        args = range(0, len(vstBuckets) - 1)
+    else:
+        # Compensate for index offset
+        for i, arg in enumerate(args):
+            args[i] = int(arg) - 1
+
+    # Enable all selected, currently disabled VSTs
+    for arg in args:
+        if vstBuckets[arg].status == Status.DISABLED:
+            src = os.path.expanduser((vstBuckets[arg].path + vstBuckets[arg].dll)[0:-4] + ".so")
+
+            path_link_folder_vendor = os.path.expanduser(genSet.path_link_folder + vstBuckets[arg].vendor)
+            dest = (path_link_folder_vendor + '/' + vstBuckets[arg].dll)[0:-4] + ".so"
+
+            log.debug("src: %s", src)
+            log.debug("dest: %s", dest)
+            
+            # Create directories as needed
+            if not os.path.exists(path_link_folder_vendor):
+                try:
+                    os.makedirs(path_link_folder_vendor)
+                except FileExistsError:
+                    # directory already exists
+                    pass
+
+            if not os.path.islink(dest):
+                try:
+                    os.symlink(src, dest)
+                except FileExistsError:
+                    # link already exists
+                    pass
+            vstBuckets[arg].status = Status.ENABLED
+            print("| - Enabled: {0:65}".format(vstBuckets[arg].vendor + '/' + vstBuckets[arg].dll[0:-4]), "|")
+        else:
+            print("| - Not a disabled VST: {0:54}".format(vstBuckets[arg].vendor + '/' + vstBuckets[arg].dll[0:-4]), "|")
+    print("--------------------------------------------------------------------------------")
+
+
+def vstDisable(genSet, vstBuckets, args):
+    print("--------------------------------------------------------------------------------")
+    log.debug("vstDisable")
+    if args[0] == 'a':
+        # Add all VSTs to selection
+        args = range(0, len(vstBuckets) - 1)
+    else:
+        # Compensate for index offset
+        for i, arg in enumerate(args):
+            args[i] = int(arg) - 1
+
+    # Disable all selected, currently enabled VSTs
+    for arg in args:
+        if vstBuckets[arg].status == Status.ENABLED:
+            path_link_folder_vendor = os.path.expanduser(genSet.path_link_folder + vstBuckets[arg].vendor)
+            link = (path_link_folder_vendor + '/' + vstBuckets[arg].dll)[0:-4] + ".so"
+
+            log.debug("link: %s", link)
+            
+            if os.path.islink(link):
+                try:
+                    os.remove(link)
+                except FileNotFoundError:
+                    # link doesn't exists after all
+                    pass
+
+            vstBuckets[arg].status = Status.DISABLED
+            print("| - Disabled: {0:64}".format(vstBuckets[arg].vendor + '/' + vstBuckets[arg].dll[0:-4]), "|")
+        else:
+            print("| - Not an enabled VST: {0:54}".format(vstBuckets[arg].vendor + '/' + vstBuckets[arg].dll[0:-4]), "|")
+    print("--------------------------------------------------------------------------------")
+
+
+def uiInput():
+    try:
+        iVal = input("('h' for help) ->>  ")
+    except KeyboardInterrupt:
+        pass
+        iVal = 'q'
+    return iVal
+
+
+def main():
+    os.system('clear')
+    print("=== Manage LinVST plugins ======================================================")
+
+    vstBuckets = [] 
+    genSet = GenSet()
+    parseRes = readConfig(genSet, vstBuckets)
+    # parseRes = retVal[0]
+    # genSet = retVal[1]
+
+    if parseRes:
+        refreshVstStatus(genSet, vstBuckets)
+        while True:
+            iVal = uiInput()
+
+            if iVal == 'q':
+                break
+            elif iVal == 'h':
+                uiHelp()
+            elif iVal == 's':
+                refreshVstStatus(genSet, vstBuckets)
+                uiStatus(vstBuckets)
+            elif iVal == 'u':
+                vstUpdate(genSet, vstBuckets)
+            else:
+                cmd = iVal[0]
+                # Remove whitespaces if any
+                tmpArgs = iVal[1:].replace(' ', '')
+                
+                # Check for valid input according to format:
+                # [ed][a0-9,]
+                if ((cmd == 'e' or cmd == 'd') and
+                    ((tmpArgs == 'a') or
+                    (re.match('^[0-9,]+$', tmpArgs)))):
+                    args = tmpArgs.split(',')
+                    log.debug("args: %s", args)
+
+                    if cmd == 'e':
+                        vstEnable(genSet, vstBuckets, args)
+                    elif cmd == 'd':
+                        vstDisable(genSet, vstBuckets, args)
+                    else:
+                        print("Somethings wrong (should never get here...)")
+                else:
+                    print("\'", iVal, "\' is no valid command.")
+    else:
+        print("| Problem: Couldn't read pylinvstmanage.ini                                    |")
+        print("--------------------------------------------------------------------------------")
+
+
+main()
