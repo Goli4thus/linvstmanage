@@ -56,6 +56,8 @@ def readConfig(genSet, vstList):
         if os.path.isfile(path):
             configPath = path
             print("| Using config file: {0:57}".format(configPath), "|")
+            if os.path.islink(path):
+                print("| -> Links to: {0:63}".format(os.path.realpath(configPath)), "|")
             break
         else:
             print("| No config file at: {0:57}".format(path), "|")
@@ -104,7 +106,7 @@ def refreshVstStatus(genSet, vstBuckets):
             vstBucket.dll.endswith( ".Dll" )):
             if os.path.isfile(os.path.expanduser(dllPath)):
                 log.debug("  -->> dll: exists")
-                if os.path.isfile(os.path.expanduser(dllPath)):
+                if os.path.isfile(os.path.expanduser(dllPath[0:-4] + '.so')):
                     log.debug("  -->> so: exists")
                     if os.path.isfile(os.path.expanduser(linkPath)):
                         log.debug("  -->> link: exists")
@@ -155,7 +157,7 @@ def formatStatus(enumStatus):
             st = 'Disabled'
     elif enumStatus == Status.NO_SO:
         if colorSupport:
-            st = colo('No *.so  ', 'cyan')
+            st = colo('No *.so  ', 'magenta')
         else:
             st = 'No *.so'
     elif enumStatus == Status.NOTFOUND:
@@ -194,22 +196,22 @@ def vstUpdate(genSet, vstBuckets):
             log.debug("sofile: %s", os.path.expanduser(sofile))
             log.debug("genSet.path_linvst_so: %s", genSet.path_linvst_so)
             shutil.copyfile(genSet.path_linvst_so, os.path.expanduser(sofile))
-    print("--------------------------------------------------------------------------------")
-    print("|   Update performed.                                                          |")
+    uiStatus(vstBuckets)
+    print("|   Update performed. (refresh status to see changes)                          |")
     print("--------------------------------------------------------------------------------")
 
 
 def vstEnable(genSet, vstBuckets, args):
-    print("--------------------------------------------------------------------------------")
     log.debug("vstEnable")
     if args[0] == 'a':
         # Add all VSTs to selection
-        args = range(0, len(vstBuckets) - 1)
+        args = range(0, len(vstBuckets))
     else:
         # Compensate for index offset
         for i, arg in enumerate(args):
             args[i] = int(arg) - 1
 
+    uiFeedback = ""
     # Enable all selected, currently disabled VSTs
     for arg in args:
         if vstBuckets[arg].status == Status.DISABLED:
@@ -236,23 +238,35 @@ def vstEnable(genSet, vstBuckets, args):
                     # link already exists
                     pass
             vstBuckets[arg].status = Status.ENABLED
-            print("| - Enabled: {0:65}".format(vstBuckets[arg].vendor + '/' + vstBuckets[arg].dll[0:-4]), "|")
+            tmpRes = '{:10}'.format('Enabled')
+            if colorSupport:
+                result = colo(tmpRes, 'green')
+            else:
+                result = tmpRes
         else:
-            print("| - Not a disabled VST: {0:54}".format(vstBuckets[arg].vendor + '/' + vstBuckets[arg].dll[0:-4]), "|")
+            tmpRes = '{:10}'.format('Unchanged')
+            if colorSupport:
+                result = colo(tmpRes, 'blue')
+            else:
+                result = tmpRes
+        uiFeedback = uiFeedback + "| - " + result + ": {0:63}".format(vstBuckets[arg].vendor + '/' + vstBuckets[arg].dll[0:-4]) + "|\n"
+    uiStatus(vstBuckets)
+    log.debug("args: %s", args)
+    print(uiFeedback[0:-1])
     print("--------------------------------------------------------------------------------")
 
 
 def vstDisable(genSet, vstBuckets, args):
-    print("--------------------------------------------------------------------------------")
     log.debug("vstDisable")
     if args[0] == 'a':
         # Add all VSTs to selection
-        args = range(0, len(vstBuckets) - 1)
+        args = range(0, len(vstBuckets))
     else:
         # Compensate for index offset
         for i, arg in enumerate(args):
             args[i] = int(arg) - 1
 
+    uiFeedback = ""
     # Disable all selected, currently enabled VSTs
     for arg in args:
         if vstBuckets[arg].status == Status.ENABLED:
@@ -269,9 +283,22 @@ def vstDisable(genSet, vstBuckets, args):
                     pass
 
             vstBuckets[arg].status = Status.DISABLED
-            print("| - Disabled: {0:64}".format(vstBuckets[arg].vendor + '/' + vstBuckets[arg].dll[0:-4]), "|")
+            tmpRes = '{:10}'.format('Disabled')
+            if colorSupport:
+                result = colo(tmpRes, 'yellow')
+            else:
+                result = tmpRes
         else:
-            print("| - Not an enabled VST: {0:54}".format(vstBuckets[arg].vendor + '/' + vstBuckets[arg].dll[0:-4]), "|")
+            tmpRes = '{:10}'.format('Unchanged')
+            if colorSupport:
+                result = colo(tmpRes, 'blue')
+            else:
+                result = tmpRes
+        uiFeedback = uiFeedback + "| - " + result + ": {0:63}".format(vstBuckets[arg].vendor + '/' + vstBuckets[arg].dll[0:-4]) + "|\n"
+    uiStatus(vstBuckets)
+    log.debug("args: %s", args)
+    log.debug("len(vstBuckets): %s", len(vstBuckets))
+    print(uiFeedback[0:-1])
     print("--------------------------------------------------------------------------------")
 
 

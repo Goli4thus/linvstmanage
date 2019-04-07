@@ -9,6 +9,7 @@ Python script to manage Windows VSTs bridged with LinVST according to a config f
 ## Dependencies
 - python3
 - optional: _termcolor_ package for colored status output
+    - Can be install with `pip install --user termcolor`
 
 ## Usage
 ### Setup the config file
@@ -24,4 +25,6 @@ It will look for the config file at two possible locations:
     1) current directory
     2) ~/.config/linvst/manage/pylinvstmanage.ini
 
+If you'd prefer a different location you could always symlink your config file to one of these locations.
+i.e. `ln -s ~/myconfigs/linvstConfig.ini ~/.config/linvst/manage/pylinvstmanage.ini`
     
