@@ -87,7 +87,7 @@ def readConfig(genSet, vstList):
         # Extract all comma separated dll names
         dlls = dll_names.split(',')
         for dll in dlls:
-            vstList.append(VstBucket(section.replace(' ', '_'), path, dll.strip()))
+            vstList.append(VstBucket(section.replace(' ', '_'), path, dll.replace('\\', '').strip()))
 
     return (True)
 
