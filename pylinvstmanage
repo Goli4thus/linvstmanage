@@ -49,8 +49,8 @@ class GenSet:
 
 # Extract data from respective config file 'pylinvstmanage.ini'
 def readConfig(genSet, vstList):
-    possibleConfigPaths = ("./pylinvstmanage.ini", 
-                           "~/.config/linvst/manage/pylinvstmanage.ini")
+    possibleConfigPaths = ("~/.config/linvst/manage/pylinvstmanage.ini", 
+                           "./pylinvstmanage.ini")
 
     configPath = ""
     for path in possibleConfigPaths:
