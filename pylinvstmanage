@@ -10,6 +10,7 @@ import os
 import sys
 import shutil
 import re
+import subprocess
 from enum import Enum
 import logging as log
 
@@ -25,12 +26,13 @@ except ImportError:
 log.basicConfig(level=log.ERROR)
 
 class Status(Enum):
-    ENABLED = 1
-    DISABLED = 2
-    NO_SO = 3
-    NOTFOUND = 4
-    ERROR = 5
-    NA = 6
+    ENABLED = 1     # VST is enabled via active softlink
+    DISABLED = 2    # VST is disabled due to missing softlink
+    MISMATCH = 3    # Mismatch between linvst.so and *.so file associated with VST-dll
+    NO_SO = 4       # VST-dll has no associated VST-so file
+    NOTFOUND = 5    # VST-dll can't be found using the specified config path
+    ERROR = 6       # Specified plugin in config file is not of type 'dll'
+    NA = 7          # Initial state
 
 class VstBucket:
     def __init__(self, vendor, path, dll):
@@ -106,14 +108,20 @@ def refreshVstStatus(genSet, vstBuckets):
             vstBucket.dll.endswith( ".Dll" )):
             if os.path.isfile(os.path.expanduser(dllPath)):
                 log.debug("  -->> dll: exists")
-                if os.path.isfile(os.path.expanduser(dllPath[0:-4] + '.so')):
+                pathVstSo = os.path.expanduser(dllPath[0:-4] + '.so')
+                if os.path.isfile(pathVstSo):
                     log.debug("  -->> so: exists")
-                    if os.path.isfile(os.path.expanduser(linkPath)):
-                        log.debug("  -->> link: exists")
-                        vstBucket.status = Status.ENABLED
+                    if CheckSoFileMatch(genSet.path_linvst_so, pathVstSo):
+                        log.debug("  -->> so: matches")
+                        if os.path.isfile(os.path.expanduser(linkPath)):
+                            log.debug("  -->> link: exists")
+                            vstBucket.status = Status.ENABLED
+                        else:
+                            log.debug("  -->> link: not there")
+                            vstBucket.status = Status.DISABLED
                     else:
-                        log.debug("  -->> link: not there")
-                        vstBucket.status = Status.DISABLED
+                        log.debug("  -->> so: mismatch")
+                        vstBucket.status = Status.MISMATCH
                 else:
                     log.debug("  -->> so: not there")
                     vstBucket.status = Status.NO_SO
@@ -124,6 +132,18 @@ def refreshVstStatus(genSet, vstBuckets):
             vstBucket.status = Status.ERROR
             log.debug("Not a dll file.")
 
+
+def CheckSoFileMatch(pathTemplateSo, pathVstSo):
+    try:
+        subprocess.check_output(['diff', pathTemplateSo, pathVstSo])
+        # 'diff' returned nothing; binary files are the same
+        isMatch = True
+    except subprocess.CalledProcessError as e:
+        # raise RuntimeError("command '{}' return with error (code {}): {}".format(e.cmd, e.returncode, e.output))
+        # 'diff' returned error code; binary files differ
+        isMatch = False
+
+    return isMatch
 
 
 def uiHelp():
@@ -155,6 +175,11 @@ def formatStatus(enumStatus):
             st = colo('Disabled ', 'yellow')
         else:
             st = 'Disabled'
+    elif enumStatus == Status.MISMATCH:
+        if colorSupport:
+            st = colo('Mismatch ', 'red')
+        else:
+            st = 'Mismatch'
     elif enumStatus == Status.NO_SO:
         if colorSupport:
             st = colo('No *.so  ', 'magenta')
@@ -190,6 +215,7 @@ def vstUpdate(genSet, vstBuckets):
     for vstBucket in vstBuckets:
         log.debug("vstBucket.status: %s", vstBucket.status)
         if ((vstBucket.status == Status.NO_SO) or 
+            (vstBucket.status == Status.MISMATCH) or 
             (vstBucket.status == Status.DISABLED) or 
             (vstBucket.status == Status.ENABLED)):
             sofile = ((vstBucket.path + vstBucket.dll)[0:-4] + ".so")
