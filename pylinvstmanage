@@ -140,8 +140,59 @@ def refreshVstStatus(genSet, vstBuckets):
             vstBucket.status = Status.ERROR
             log.debug("Not a dll file.")
 
+def checkForOrphans(genSet, vstBuckets):
+    # Get a list of all softlinks in link-folder
+    soLinks = []
+    orphans = []
 
-def CheckSoFileMatch(pathTemplateSo, pathVstSo):
+    linkFolder = genSet.path_link_folder
+    with os.scandir(linkFolder) as topLevel:
+        for entry in topLevel:
+            if entry.is_file() and entry.name.endswith('.so'):
+                # Found a top level so-link
+                # Add to orphans right away as such links aren't created by this script
+                orphans.append(entry.name)
+            elif entry.is_dir():
+                # Found a vendor folder
+                vendor = entry.name
+                with os.scandir(linkFolder + vendor) as vendorLevel:
+                    for entry in vendorLevel:
+                        if entry.is_file() and entry.name.endswith('.so'):
+                            # Found a vendor so-link
+                            # Cross check with list of managed vsts to determine if orphan
+                            for vstBucket in vstBuckets:
+                                isOrphan = True
+                                if ((vstBucket.vendor == vendor) and 
+                                    ((vstBucket.dll[0:-4] + ".so") == entry.name)):
+                                    isOrphan = False
+                                    break
+
+                            if isOrphan:
+                                # Add to orphans
+                                orphans.append(vendor + '/' + entry.name)
+    return orphans
+    
+
+def removeOrphans(genSet, orphans):
+    linkFolder = genSet.path_link_folder
+    # Clean up orphaned softlinks
+    for orphan in orphans:
+        try:
+            os.remove(linkFolder + orphan)
+        except:
+            print(sys.exc_info()[0])
+
+    # Try to remove potentially empty vendor directories
+    with os.scandir(linkFolder) as topLevel:
+        for entry in topLevel:
+            try:
+                os.rmdir(linkFolder + entry.name)
+            except OSError:
+                # Apparently not an empty directory
+                pass
+
+
+def checkSoFileMatch(pathTemplateSo, pathVstSo):
     try:
         subprocess.check_output(['diff', pathTemplateSo, pathVstSo])
         # 'diff' returned nothing; binary files are the same
@@ -160,7 +211,8 @@ def uiHelp():
     print("| - q: Quit                                                                    |")
     print("| - s: Print status                                                            |")
     print("| - u: Update/Create *.so files for all existing VST-dlls                      |")
-    print("| - -------------------------------------------------------------------------- |")
+    print("| - r: Remove orphaned so-links (if any) from link-folder                      |")
+    print("| ---------------------------------------------------------------------------- |")
     print("| - e: Enable specified VSTs                                                   |")
     print("| - d: Disable specified VSTs                                                  |\n" +
           "|   (i.e. 'e a': enable all disabled VSTs                                      |\n" +
@@ -217,6 +269,13 @@ def uiStatus(vstBuckets):
                 index + 1, status, vstBucket.dll, vstBucket.vendor))
     print("================================================================================")
 
+
+def uiOrphans(orphans):
+    print("| Orphaned so-links found within link-folder (remove with 'r'):                |")
+    for orphan in orphans:
+        print("|   - {0:72} |".format(orphan))
+    print("================================================================================")
+    
 
 # Update all *.so files associated with enabled or disabled VSTs
 def vstUpdate(genSet, vstBuckets):
@@ -352,6 +411,7 @@ def main():
     vstBuckets = [] 
     genSet = GenSet()
     parseRes = readConfig(genSet, vstBuckets)
+    orphans = []
     # parseRes = retVal[0]
     # genSet = retVal[1]
 
@@ -367,8 +427,14 @@ def main():
             elif iVal == 's':
                 refreshVstStatus(genSet, vstBuckets)
                 uiStatus(vstBuckets)
+                orphans = checkForOrphans(genSet, vstBuckets)
+                if orphans:
+                    uiOrphans(orphans)
             elif iVal == 'u':
                 vstUpdate(genSet, vstBuckets)
+            elif iVal == 'r':
+                removeOrphans(genSet, orphans)
+                uiStatus(vstBuckets)
             else:
                 cmd = iVal[0]
                 # Remove whitespaces if any
