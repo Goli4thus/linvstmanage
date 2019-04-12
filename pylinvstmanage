@@ -57,13 +57,12 @@ def readConfig(genSet, vstList):
         path = os.path.expanduser(path)
         if os.path.isfile(path):
             configPath = path
-            print("| Using config file: {0:57}".format(configPath), "|")
+            print("| - Using config file: {0:55}".format(configPath), "|")
             if os.path.islink(path):
                 print("| -> Links to: {0:63}".format(os.path.realpath(configPath)), "|")
             break
         else:
-            print("| No config file at: {0:57}".format(path), "|")
-    print("--------------------------------------------------------------------------------")
+            print("| - Error: No config file at: {0:48}".format(path), "|")
 
     if configPath != "":
         try:
@@ -73,25 +72,34 @@ def readConfig(genSet, vstList):
             print(sys.exc_info()[0])
             return False
     else:
-        return (False)
+        return False
 
     # Parse section 'GenericSettings'
-    genSet.path_link_folder = config['GeneralSettings']['path_link_folder'].replace('\\', '')
+    genSet.path_link_folder = os.path.expanduser(config['GeneralSettings']['path_link_folder'].replace('\\', ''))
     if config.has_option('GeneralSettings', 'path_linvst_so'):
-        genSet.path_linvst_so = config['GeneralSettings']['path_linvst_so'].replace('\\', '')
+        genSet.path_linvst_so = os.path.expanduser(config['GeneralSettings']['path_linvst_so'].replace('\\', ''))
     else:
         genSet.path_linvst_so = '/usr/share/LinVst/linvst.so'
+
+    # Check if linvst.so actually exists under the specified path
+    if os.path.isfile(genSet.path_linvst_so):
+        print("| - Using linvst.so: {0:57}".format(genSet.path_linvst_so), "|")
+        print("|------------------------------------------------------------------------------|")
+    else:
+        print("| - Error: No linvst.so at: {0:50}".format(genSet.path_linvst_so), "|")
+        print("|------------------------------------------------------------------------------|")
+        return False
     
     # Parse VST sections
     for section in config.sections()[1:]:
-        path = config[section]['path'].replace('\\', '')
+        path = os.path.expanduser(config[section]['path'].replace('\\', ''))
         dll_names = config[section]['dll_names']
         # Extract all comma separated dll names
         dlls = dll_names.split(',')
         for dll in dlls:
             vstList.append(VstBucket(section.replace(' ', '_'), path, dll.replace('\\', '').strip()))
 
-    return (True)
+    return True
 
 
 def refreshVstStatus(genSet, vstBuckets):
@@ -106,14 +114,14 @@ def refreshVstStatus(genSet, vstBuckets):
         if (vstBucket.dll.endswith( ".dll" ) or 
             vstBucket.dll.endswith( ".DLL" ) or 
             vstBucket.dll.endswith( ".Dll" )):
-            if os.path.isfile(os.path.expanduser(dllPath)):
+            if os.path.isfile(dllPath):
                 log.debug("  -->> dll: exists")
-                pathVstSo = os.path.expanduser(dllPath[0:-4] + '.so')
+                pathVstSo = dllPath[0:-4] + '.so'
                 if os.path.isfile(pathVstSo):
                     log.debug("  -->> so: exists")
-                    if CheckSoFileMatch(genSet.path_linvst_so, pathVstSo):
+                    if checkSoFileMatch(genSet.path_linvst_so, pathVstSo):
                         log.debug("  -->> so: matches")
-                        if os.path.isfile(os.path.expanduser(linkPath)):
+                        if os.path.isfile(linkPath):
                             log.debug("  -->> link: exists")
                             vstBucket.status = Status.ENABLED
                         else:
@@ -202,7 +210,7 @@ def uiStatus(vstBuckets):
     os.system('clear')
     print("==== Status ====================================================================")
     print("|  # |  Status    |  Name                           |  Vendor                  |")
-    print("|------------------------------------------------------------------------------|")
+    print("| -- | ---------- | ------------------------------- | ------------------------ |")
     for index, vstBucket in enumerate(vstBuckets):
         status = formatStatus(vstBucket.status)
         print("| {0:2} |  {1:9} |  {2:30} |  {3:23} |".format( 
@@ -219,9 +227,9 @@ def vstUpdate(genSet, vstBuckets):
             (vstBucket.status == Status.DISABLED) or 
             (vstBucket.status == Status.ENABLED)):
             sofile = ((vstBucket.path + vstBucket.dll)[0:-4] + ".so")
-            log.debug("sofile: %s", os.path.expanduser(sofile))
+            log.debug("sofile: %s", sofile)
             log.debug("genSet.path_linvst_so: %s", genSet.path_linvst_so)
-            shutil.copyfile(genSet.path_linvst_so, os.path.expanduser(sofile))
+            shutil.copyfile(genSet.path_linvst_so, sofile)
     uiStatus(vstBuckets)
     print("|   Update performed. (refresh status to see changes)                          |")
     print("--------------------------------------------------------------------------------")
@@ -241,9 +249,9 @@ def vstEnable(genSet, vstBuckets, args):
     # Enable all selected, currently disabled VSTs
     for arg in args:
         if vstBuckets[arg].status == Status.DISABLED:
-            src = os.path.expanduser((vstBuckets[arg].path + vstBuckets[arg].dll)[0:-4] + ".so")
+            src = (vstBuckets[arg].path + vstBuckets[arg].dll)[0:-4] + ".so"
 
-            path_link_folder_vendor = os.path.expanduser(genSet.path_link_folder + vstBuckets[arg].vendor)
+            path_link_folder_vendor = genSet.path_link_folder + vstBuckets[arg].vendor
             dest = (path_link_folder_vendor + '/' + vstBuckets[arg].dll)[0:-4] + ".so"
 
             log.debug("src: %s", src)
@@ -296,7 +304,7 @@ def vstDisable(genSet, vstBuckets, args):
     # Disable all selected, currently enabled VSTs
     for arg in args:
         if vstBuckets[arg].status == Status.ENABLED:
-            path_link_folder_vendor = os.path.expanduser(genSet.path_link_folder + vstBuckets[arg].vendor)
+            path_link_folder_vendor = genSet.path_link_folder + vstBuckets[arg].vendor
             link = (path_link_folder_vendor + '/' + vstBuckets[arg].dll)[0:-4] + ".so"
 
             log.debug("link: %s", link)
@@ -383,8 +391,8 @@ def main():
                 else:
                     print("\'", iVal, "\' is no valid command.")
     else:
-        print("| Problem: Couldn't read pylinvstmanage.ini                                    |")
-        print("--------------------------------------------------------------------------------")
+        print("| Exiting due to error mentioned above.                                        |")
+        print("================================================================================")
 
-
-main()
+if __name__ == '__main__':
+    main()
