@@ -1,4 +1,4 @@
-# pylinvstmanage
+# linvstmanage
 Python script to manage Windows VSTs bridged with LinVST according to a config file.
 
 ## Features
@@ -18,16 +18,16 @@ It's an ini-format config file with basically two parts:
     1) General settings
     2) Variable amount of sections that specify one or more VST-dlls using a folder path and their respective names
     
-Further documentation can be found within the config file *pylinvstmanage.ini* itself.
+Further documentation can be found within the config file *linvstmanage.ini* itself.
 
 ### Run the script
-Simply run *pylinvstmanage* from the console.
+Simply run *linvstmanage-cli* from the console.
 It will look for the config file at two possible locations:
     
     1) current directory
-    2) ~/.config/linvst/manage/pylinvstmanage.ini
+    2) ~/.config/linvst/manage/linvstmanage.ini
 
 If you'd prefer a different location you could always symlink your config file to one of these locations.
 
-i.e. `ln -s ~/myconfigs/linvstConfig.ini ~/.config/linvst/manage/pylinvstmanage.ini`
+i.e. `ln -s ~/myconfigs/linvstConfig.ini ~/.config/linvst/manage/linvstmanage.ini`
     
