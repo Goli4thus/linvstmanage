@@ -75,11 +75,24 @@ def readConfig(genSet, vstList):
         try:
             config = configparser.ConfigParser()
             config.read(configPath)
-        except:
-            log.debug(sys.exc_info()[0])
-            return False, resStr
+        except configparser.DuplicateSectionError:
+            resStr += ("|{0:78}|\n".format(" - Config error: Duplicate section"))
+            pass
+            return False, resStr[:-1]
+        except configparser.DuplicateOptionError:
+            resStr += ("|{0:78}|\n".format(" - Config error: Duplicate option"))
+            pass
+            return False, resStr[:-1]
+        except configparser.NoOptionError:
+            resStr += ("|{0:78}|\n".format(" - Config error: Missing option"))
+            pass
+            return False, resStr[:-1]
+        except configparser.Error:
+            resStr += ("|{0:78}|\n".format(" - Some error during config file parsing:", sys.exc_info()[0]))
+            pass
+            return False, resStr[:-1]
     else:
-        return False, resStr
+        return False, resStr[:-1]
 
     # Parse section 'GenericSettings'
     # path_link_folder
@@ -87,7 +100,7 @@ def readConfig(genSet, vstList):
         genSet.path_link_folder = os.path.expanduser(config['GeneralSettings']['path_link_folder'].replace('\\', ''))
     else:
         resStr += ("|{0:78}|\n".format(" - Error: 'path_link_folder' option isn't set"))
-        return False, resStr
+        return False, resStr[:-1]
 
     # orphan_detection
     genSet.orphan_detection = False
@@ -96,7 +109,7 @@ def readConfig(genSet, vstList):
             genSet.orphan_detection = True
     else:
         resStr += ("|{0:78}|\n".format(" - Error: 'orphan_detection' option isn't set"))
-        return False, resStr
+        return False, resStr[:-1]
 
     # path_linvst_so
     if config.has_option('GeneralSettings', 'path_linvst_so'):
@@ -109,12 +122,16 @@ def readConfig(genSet, vstList):
         resStr += ("|{0:78}|\n".format(" - Using linvst.so: {0}".format(genSet.path_linvst_so)))
     else:
         resStr += ("|{0:78}|\n".format(" - Error: No linvst.so at: {0}".format(genSet.path_linvst_so)))
-        return False, resStr
+        return False, resStr[:-1]
     
     # Parse VST sections
     for section in config.sections()[1:]:
-        path = os.path.expanduser(config[section]['path'].replace('\\', ''))
-        dll_names = config[section]['dll_names']
+        try:
+            path = os.path.expanduser(config[section]['path'].replace('\\', ''))
+            dll_names = config[section]['dll_names']
+        except:
+            # log.debug(sys.exc_info()[0])
+            print(sys.exc_info()[0])
         # Extract all comma separated dll names
         dlls = dll_names.split(',')
         for dll in dlls:
@@ -266,12 +283,12 @@ def formatStatus(enumStatus):
             st = 'Disabled'
     elif enumStatus == Status.MISMATCH:
         if colorSupport:
-            st = colo('Mismatch ', 'red')
+            st = colo('Mismatch ', 'blue')
         else:
             st = 'Mismatch'
     elif enumStatus == Status.NO_SO:
         if colorSupport:
-            st = colo('No *.so  ', 'magenta')
+            st = colo('No *.so  ', 'blue')
         else:
             st = 'No *.so'
     elif enumStatus == Status.NOTFOUND:
