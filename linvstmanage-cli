@@ -47,42 +47,47 @@ class GenSet:
         self.orphan_detection = False
         self.path_linvst_so = ""
 
+class VstBucketChange:
+    def __init__(self, index, result):
+        self.index = index
+        self.result = result
+
 
 # Extract data from respective config file 'linvstmanage.ini'
 def readConfig(genSet, vstList):
     possibleConfigPaths = ("~/.config/linvst/manage/linvstmanage.ini", 
                            "./linvstmanage.ini")
 
+    resStr = ""
     configPath = ""
     for path in possibleConfigPaths:
         path = os.path.expanduser(path)
         if os.path.isfile(path):
             configPath = path
-            print("|{0:78}|".format(" - Using config file: {0}".format(configPath)))
+            resStr += ("|{0:78}|\n".format(" - Using config file: {0}".format(configPath)))
             if os.path.islink(path):
-                print("|{0:78}|".format(" -> Links to: {0}".format(os.path.realpath(configPath))))
+                resStr += ("|{0:78}|\n".format(" -> Links to: {0}".format(os.path.realpath(configPath))))
             break
         else:
-            print("|{0:78}|".format(" - Error: No config file at: {0}".format(path)))
+            resStr += ("|{0:78}|\n".format(" - Error: No config file at: {0}".format(path)))
 
     if configPath != "":
         try:
             config = configparser.ConfigParser()
             config.read(configPath)
         except:
-            print(sys.exc_info()[0])
-            return False
+            log.debug(sys.exc_info()[0])
+            return False, resStr
     else:
-        return False
+        return False, resStr
 
     # Parse section 'GenericSettings'
     # path_link_folder
     if config.has_option('GeneralSettings', 'path_link_folder'):
         genSet.path_link_folder = os.path.expanduser(config['GeneralSettings']['path_link_folder'].replace('\\', ''))
     else:
-        print("|{0:78}|".format(" - Error: 'path_link_folder' option isn't set"))
-        print("|{0:78}|".format("-" * 78))
-        return False
+        resStr += ("|{0:78}|\n".format(" - Error: 'path_link_folder' option isn't set"))
+        return False, resStr
 
     # orphan_detection
     genSet.orphan_detection = False
@@ -90,9 +95,8 @@ def readConfig(genSet, vstList):
         if config['GeneralSettings']['orphan_detection'] == 'on':
             genSet.orphan_detection = True
     else:
-        print("|{0:78}|".format(" - Error: 'orphan_detection' option isn't set"))
-        print("|{0:78}|".format("-" * 78))
-        return False
+        resStr += ("|{0:78}|\n".format(" - Error: 'orphan_detection' option isn't set"))
+        return False, resStr
 
     # path_linvst_so
     if config.has_option('GeneralSettings', 'path_linvst_so'):
@@ -102,12 +106,10 @@ def readConfig(genSet, vstList):
 
     # Check if linvst.so actually exists under the specified path
     if os.path.isfile(genSet.path_linvst_so):
-        print("|{0:78}|".format(" - Using linvst.so: {0}".format(genSet.path_linvst_so)))
-        print("|{0:78}|".format("-" * 78))
+        resStr += ("|{0:78}|\n".format(" - Using linvst.so: {0}".format(genSet.path_linvst_so)))
     else:
-        print("|{0:78}|".format(" - Error: No linvst.so at: {0}".format(genSet.path_linvst_so)))
-        print("|{0:78}|".format("-" * 78))
-        return False
+        resStr += ("|{0:78}|\n".format(" - Error: No linvst.so at: {0}".format(genSet.path_linvst_so)))
+        return False, resStr
     
     # Parse VST sections
     for section in config.sections()[1:]:
@@ -118,7 +120,12 @@ def readConfig(genSet, vstList):
         for dll in dlls:
             vstList.append(VstBucket(section.replace(' ', '_'), path, dll.replace('\\', '').strip()))
 
-    return True
+    return True, resStr[:-1]
+
+
+def uiReadConfig(resStr):
+    print(resStr)
+    print("|{0:78}|".format("-" * 78))
 
 
 def refreshVstStatus(genSet, vstBuckets):
@@ -199,7 +206,7 @@ def removeOrphans(genSet, orphans):
         try:
             os.remove(linkFolder + orphan)
         except:
-            print(sys.exc_info()[0])
+            log.Debug(sys.exc_info()[0])
 
     # Try to remove potentially empty vendor directories
     with os.scandir(linkFolder) as topLevel:
@@ -214,7 +221,7 @@ def removeOrphans(genSet, orphans):
 def checkSoFileMatch(pathTemplateSo, pathVstSo):
     try:
         subprocess.check_output(['diff', pathTemplateSo, pathVstSo])
-        # 'diff' returned nothing; binary files are the same
+        # 'diff' returned nothing (by means of no exception); binary files are the same
         isMatch = True
     except subprocess.CalledProcessError as e:
         # raise RuntimeError("command '{}' return with error (code {}): {}".format(e.cmd, e.returncode, e.output))
@@ -311,10 +318,10 @@ def vstUpdate(genSet, vstBuckets):
             log.debug("sofile: %s", sofile)
             log.debug("genSet.path_linvst_so: %s", genSet.path_linvst_so)
             shutil.copyfile(genSet.path_linvst_so, sofile)
-    uiStatus(vstBuckets)
-    print("|{0:78}|".format("   Update performed. (refresh status to see changes)"))
-    print("--------------------------------------------------------------------------------")
 
+def uiVstUpdate():
+    print("|{0:78}|".format("   Update performed. (refresh status to see changes)"))
+    print("-" * 80)
 
 def vstEnable(genSet, vstBuckets, args):
     log.debug("vstEnable")
@@ -326,7 +333,7 @@ def vstEnable(genSet, vstBuckets, args):
         for i, arg in enumerate(args):
             args[i] = int(arg) - 1
 
-    uiFeedback = ""
+    vstBucketChanges = []
     # Enable all selected, currently disabled VSTs
     for arg in args:
         if vstBuckets[arg].status == Status.DISABLED:
@@ -364,11 +371,11 @@ def vstEnable(genSet, vstBuckets, args):
                 result = colo(tmpRes, 'blue')
             else:
                 result = tmpRes
-        uiFeedback = uiFeedback + "| - " + result + ": {0:63}".format(vstBuckets[arg].vendor + '/' + vstBuckets[arg].dll[0:-4]) + "|\n"
-    uiStatus(vstBuckets)
+        vstBucketChanges.append(VstBucketChange(arg, result))
+
     log.debug("args: %s", args)
-    print(uiFeedback[0:-1])
-    print("-" * 80)
+
+    return vstBucketChanges
 
 
 def vstDisable(genSet, vstBuckets, args):
@@ -381,7 +388,7 @@ def vstDisable(genSet, vstBuckets, args):
         for i, arg in enumerate(args):
             args[i] = int(arg) - 1
 
-    uiFeedback = ""
+    vstBucketChanges = []
     # Disable all selected, currently enabled VSTs
     for arg in args:
         if vstBuckets[arg].status == Status.ENABLED:
@@ -409,11 +416,26 @@ def vstDisable(genSet, vstBuckets, args):
                 result = colo(tmpRes, 'blue')
             else:
                 result = tmpRes
-        uiFeedback = uiFeedback + "| - " + result + ": {0:63}".format(vstBuckets[arg].vendor + '/' + vstBuckets[arg].dll[0:-4]) + "|\n"
-    uiStatus(vstBuckets)
+        vstBucketChanges.append(VstBucketChange(arg, result))
+
     log.debug("args: %s", args)
     log.debug("len(vstBuckets): %s", len(vstBuckets))
-    print(uiFeedback[0:-1])
+
+    return vstBucketChanges
+
+
+def uiVstChange(vstBuckets, vstBucketChanges):
+    for vstBC in vstBucketChanges:
+        if colorSupport:
+            if vstBC.result == 'Enabled':
+                vstBC.result = colo(vstBC.result, 'green')
+            elif vstBC.result == 'Disabled':
+                vstBC.result = colo(vstBC.result, 'yellow')
+            elif vstBC.result == 'Unchanged':
+                vstBC.result = colo(vstBC.result, 'blue')
+
+            uiFeedback = "| - {0:10}".format(vstBC.result) + ": {0:63}".format(vstBuckets[vstBC.index].vendor + ': ' + vstBuckets[vstBC.index].dll[0:-4]) + "|"
+        print(uiFeedback)
     print("-" * 80)
 
 
@@ -432,7 +454,9 @@ def main():
 
     vstBuckets = [] 
     genSet = GenSet()
-    parseRes = readConfig(genSet, vstBuckets)
+
+    parseRes, resStr = readConfig(genSet, vstBuckets)
+    uiReadConfig(resStr)
     orphans = []
     # parseRes = retVal[0]
     # genSet = retVal[1]
@@ -455,6 +479,8 @@ def main():
                         uiOrphans(orphans)
             elif iVal == 'u':
                 vstUpdate(genSet, vstBuckets)
+                uiStatus(vstBuckets)
+                uiVstUpdate()
             elif iVal == 'r':
                 if genSet.orphan_detection:
                     removeOrphans(genSet, orphans)
@@ -477,9 +503,13 @@ def main():
                     log.debug("args: %s", args)
 
                     if cmd == 'e':
-                        vstEnable(genSet, vstBuckets, args)
+                        vstBCs = vstEnable(genSet, vstBuckets, args)
+                        uiStatus(vstBuckets)
+                        uiVstChange(vstBuckets, vstBCs)
                     elif cmd == 'd':
-                        vstDisable(genSet, vstBuckets, args)
+                        vstBCs = vstDisable(genSet, vstBuckets, args)
+                        uiStatus(vstBuckets)
+                        uiVstChange(vstBuckets, vstBCs)
                     else:
                         print(" Error: Somethings wrong (should never get here...)")
                 else:
