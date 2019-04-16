@@ -262,7 +262,7 @@ def uiHelp(genSet):
     print("| - e: Enable specified VSTs                                                   |")
     print("| - d: Disable specified VSTs                                                  |\n" +
           "|   (i.e. 'e a': enable all disabled VSTs                                      |\n" +
-          "|         'd 3': enable VST with index 3                                       |\n" +
+          "|         'd 3': disable VST with index 3                                      |\n" +
           "|         'e 4,5,7': enable VSTs with index 4,5 and 7)                         |")
     print("================================================================================")
 
