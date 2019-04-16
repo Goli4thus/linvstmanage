@@ -38,7 +38,7 @@ i.e. `ln -s ~/myconfigs/linvstConfig.ini ~/.config/linvst/manage/linvstmanage.in
 ## Further notes
 ### VST states
 
-![Status view]()
+![Status view](https://github.com/Goli4thus/linvstmanage/blob/master/img/uiStatus.png)
 
 | State    | Meaning                                                                   |
 | -------- | ------------------------------------------------------------------------- |
@@ -50,7 +50,7 @@ i.e. `ln -s ~/myconfigs/linvstConfig.ini ~/.config/linvst/manage/linvstmanage.in
 | Error    | Specified plugin in config file is not of type 'dll'                      |
     
     
-![Help view]()
+![Help view](https://github.com/Goli4thus/linvstmanage/blob/master/img/uiHelp.png)
     
     
 ### Typical setup
