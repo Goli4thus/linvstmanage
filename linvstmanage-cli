@@ -451,7 +451,7 @@ def uiVstChange(vstBuckets, vstBucketChanges):
             elif vstBC.result == 'Unchanged':
                 vstBC.result = colo(vstBC.result, 'blue')
 
-            uiFeedback = "| - {0:10}".format(vstBC.result) + ": {0:63}".format(vstBuckets[vstBC.index].vendor + ': ' + vstBuckets[vstBC.index].dll[0:-4]) + "|"
+        uiFeedback = "| - {0:10}".format(vstBC.result) + ": {0:63}".format(vstBuckets[vstBC.index].vendor + ': ' + vstBuckets[vstBC.index].dll[0:-4]) + "|"
         print(uiFeedback)
     print("-" * 80)
 
