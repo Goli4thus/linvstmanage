@@ -323,14 +323,12 @@ def uiOrphans(orphans):
     print("================================================================================")
     
 
-# Update all *.so files associated with enabled or disabled VSTs
+# Update all *.so files associated with VST-dlls (assumes up to date vstBucket.status)
 def vstUpdate(genSet, vstBuckets):
     for vstBucket in vstBuckets:
         log.debug("vstBucket.status: %s", vstBucket.status)
         if ((vstBucket.status == Status.NO_SO) or 
-            (vstBucket.status == Status.MISMATCH) or 
-            (vstBucket.status == Status.DISABLED) or 
-            (vstBucket.status == Status.ENABLED)):
+            (vstBucket.status == Status.MISMATCH)):
             sofile = ((vstBucket.path + vstBucket.dll)[0:-4] + ".so")
             log.debug("sofile: %s", sofile)
             log.debug("genSet.path_linvst_so: %s", genSet.path_linvst_so)
@@ -495,6 +493,7 @@ def main():
                     if orphans:
                         uiOrphans(orphans)
             elif iVal == 'u':
+                refreshVstStatus(genSet, vstBuckets)
                 vstUpdate(genSet, vstBuckets)
                 uiStatus(vstBuckets)
                 uiVstUpdate()
