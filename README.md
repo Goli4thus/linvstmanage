@@ -9,8 +9,6 @@ Python script to manage Windows VSTs bridged with [LinVst](https://github.com/os
 
 ## Dependencies
 - python3
-- optional: _termcolor_ package for colored status output
-    - Can be install with `pip install --user termcolor`
 
 ## Usage
 ### Setup the config file
