@@ -14,13 +14,6 @@ import subprocess
 from enum import Enum
 import logging as log
 
-try:
-    from termcolor import colored as colo
-    colorSupport = True
-except ImportError:
-    colorSupport = False
-    pass # module doesn't exist, deal with it.
-
 # Set log level
 # log.basicConfig(level=log.DEBUG)
 log.basicConfig(level=log.ERROR)
@@ -51,6 +44,16 @@ class VstBucketChange:
     def __init__(self, index, result):
         self.index = index
         self.result = result
+
+
+# Define color expressions
+color_enabled   = lambda text: '\033[0;32m' + text + '\033[0m'
+color_disabled  = lambda text: '\033[0;93m' + text + '\033[0m'
+color_mismatch  = lambda text: '\033[0;35m' + text + '\033[0m'
+color_noSo      = lambda text: '\033[0;35m' + text + '\033[0m'
+color_notFound  = lambda text: '\033[0;31m' + text + '\033[0m'
+color_error     = lambda text: '\033[0;31m' + text + '\033[0m'
+color_unchanged = lambda text: '\033[0;35m' + text + '\033[0m'
 
 
 # Extract data from respective config file 'linvstmanage.ini'
@@ -267,40 +270,23 @@ def uiHelp(genSet):
     print("================================================================================")
 
 
+
 # Convert internal VST status to printable one
 def formatStatus(enumStatus):
     # Note: colorSupport with package 'colored' seems to ignore width formatting later on.
     #       Therefore padding is added manually here as a workaround.
     if enumStatus == Status.ENABLED:
-        if colorSupport:
-            st = colo('Enabled  ', 'green')
-        else:
-            st = 'Enabled'
+        st = color_enabled('Enabled  ')
     elif enumStatus == Status.DISABLED:
-        if colorSupport:
-            st = colo('Disabled ', 'yellow')
-        else:
-            st = 'Disabled'
+        st = color_disabled('Disabled ')
     elif enumStatus == Status.MISMATCH:
-        if colorSupport:
-            st = colo('Mismatch ', 'blue')
-        else:
-            st = 'Mismatch'
+        st = color_mismatch('Mismatch ')
     elif enumStatus == Status.NO_SO:
-        if colorSupport:
-            st = colo('No *.so  ', 'blue')
-        else:
-            st = 'No *.so'
+        st = color_noSo('No *.so  ')
     elif enumStatus == Status.NOTFOUND:
-        if colorSupport:
-            st = colo('NotFound ', 'red')
-        else:
-            st = 'NotFound'
+        st = color_notFound('NotFound ')
     else:
-        if colorSupport:
-            st = colo('Error    ', 'red')
-        else:
-            st = 'Error'
+        st = color_error('Error    ')
     return st
 
 
@@ -375,17 +361,11 @@ def vstEnable(genSet, vstBuckets, args):
                     # link already exists
                     pass
             vstBuckets[arg].status = Status.ENABLED
-            tmpRes = '{:10}'.format('Enabled')
-            if colorSupport:
-                result = colo(tmpRes, 'green')
-            else:
-                result = tmpRes
+            tmpRes = '{:10}'.format('Enabled ')
+            result = color_enabled(tmpRes)
         else:
             tmpRes = '{:10}'.format('Unchanged')
-            if colorSupport:
-                result = colo(tmpRes, 'blue')
-            else:
-                result = tmpRes
+            result = color_unchanged(tmpRes)
         vstBucketChanges.append(VstBucketChange(arg, result))
 
     log.debug("args: %s", args)
@@ -421,16 +401,10 @@ def vstDisable(genSet, vstBuckets, args):
 
             vstBuckets[arg].status = Status.DISABLED
             tmpRes = '{:10}'.format('Disabled')
-            if colorSupport:
-                result = colo(tmpRes, 'yellow')
-            else:
-                result = tmpRes
+            result = color_disabled(tmpRes)
         else:
             tmpRes = '{:10}'.format('Unchanged')
-            if colorSupport:
-                result = colo(tmpRes, 'blue')
-            else:
-                result = tmpRes
+            result = color_unchanged(tmpRes)
         vstBucketChanges.append(VstBucketChange(arg, result))
 
     log.debug("args: %s", args)
@@ -441,13 +415,12 @@ def vstDisable(genSet, vstBuckets, args):
 
 def uiVstChange(vstBuckets, vstBucketChanges):
     for vstBC in vstBucketChanges:
-        if colorSupport:
-            if vstBC.result == 'Enabled':
-                vstBC.result = colo(vstBC.result, 'green')
-            elif vstBC.result == 'Disabled':
-                vstBC.result = colo(vstBC.result, 'yellow')
-            elif vstBC.result == 'Unchanged':
-                vstBC.result = colo(vstBC.result, 'blue')
+        if vstBC.result == 'Enabled':
+            vstBC.result = color_enabled(vstBC.result)
+        elif vstBC.result == 'Disabled':
+            vstBC.result = color_disabled(vstBC.result)
+        elif vstBC.result == 'Unchanged':
+            vstBC.result = color_unchanged(vstBC.result)
 
         uiFeedback = "| - {0:10}".format(vstBC.result) + ": {0:63}".format(vstBuckets[vstBC.index].vendor + ': ' + vstBuckets[vstBC.index].dll[0:-4]) + "|"
         print(uiFeedback)
