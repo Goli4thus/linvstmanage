@@ -1,4 +1,8 @@
 # linvstmanage
+*NEW:* There's a successor now: [LinVstManager](https://github.com/Goli4thus/linvstmanager)
+
+---------------------------------------
+
 Python script to manage Windows VSTs bridged with [LinVst](https://github.com/osxmidi/LinVst) according to a config file.
 
 ## Features
